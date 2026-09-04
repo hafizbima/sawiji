@@ -4,7 +4,7 @@
     {
       "src": "server.js",
       "use": "@vercel/node",
-      "config": { "includeFiles": ["views/**", "public/**"], "region": "hnd1" }
+      "config": { "includeFiles": ["views/**", "public/**"] }
     }
   ],
   "routes": [
