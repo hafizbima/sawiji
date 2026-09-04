@@ -1,0 +1,6 @@
+node_modules/
+pilates.db
+pilates.db-shm
+pilates.db-wal
+.env
+.vercel

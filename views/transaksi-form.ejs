@@ -1,0 +1,123 @@
+<h1>Transaksi Baru</h1>
+<form method="post" action="/transaksi/baru" id="transaksi-form">
+  <div class="form-grid">
+
+  <div class="form-group">
+    <label>Jenis Transaksi</label>
+    <select name="type" id="type" required>
+      <option value="">Pilih jenis</option>
+      <option value="booking_new">Booking Baru</option>
+      <option value="payment">Payment</option>
+      <option value="session_use">Pakai Sesi Member</option>
+      <option value="add_package">Tambah Paket</option>
+      <option value="reschedule">Reschedule</option>
+      <option value="cancel">Cancel</option>
+      <option value="refund">Refund</option>
+      <option value="transfer">Transfer Sesi</option>
+    </select>
+  </div>
+
+  <div class="form-group">
+    <label>Nama Customer</label>
+    <input type="text" name="customer_name" id="customer_name" required autocomplete="off">
+  </div>
+
+  <div class="form-group">
+    <label>No. HP</label>
+    <input type="text" name="phone" id="phone" autocomplete="off">
+  </div>
+
+  <div class="form-group field-schedule">
+    <label>Pilih Slot Jadwal</label>
+    <select name="schedule_id" id="schedule_id">
+      <option value="">-- Pilih --</option>
+      <% schedule.forEach(s => { %>
+      <option value="<%= s.id %>"><%= new Date(s.date).toLocaleDateString('id-ID') %> — Sesi <%= s.session_no %> (<%= s.time %>) — <%= s.class_name %> [Sisa: <%= s.sisa %>]</option>
+      <% }) %>
+    </select>
+  </div>
+
+  <div class="form-group field-session-count">
+    <label>Jumlah Sesi</label>
+    <input type="number" name="session_count" id="session_count" min="1" value="1">
+  </div>
+
+  <div class="form-group field-nominal">
+    <label>Nominal (Rp)</label>
+    <input type="number" name="nominal" id="nominal" step="1000" placeholder="150000">
+  </div>
+
+  <div class="form-group field-payment-method">
+    <label>Metode Bayar</label>
+    <select name="payment_method" id="payment_method">
+      <option value="">-- Pilih --</option>
+      <option>QRIS</option>
+      <option>Transfer</option>
+      <option>Tunai</option>
+    </select>
+  </div>
+
+  <div class="form-group field-payment-status">
+    <label>Status Bayar</label>
+    <select name="payment_status" id="payment_status">
+      <option value="">-- Pilih --</option>
+      <option>Lunas</option>
+      <option>DP</option>
+      <option>Belum</option>
+    </select>
+  </div>
+
+  <div class="form-group field-paid-by">
+    <label>Dibayarkan Oleh</label>
+    <input type="text" name="paid_by" id="paid_by" placeholder="Jika dibayar orang lain">
+  </div>
+
+  <div class="form-group field-ref-id">
+    <label>Ref ID Transaksi</label>
+    <select name="ref_id" id="ref_id">
+      <option value="">-- Pilih --</option>
+      <% ledger.forEach(e => { %>
+      <option value="<%= e.id %>">#<%= e.id %> — <%= e.type.replace(/_/g, ' ') %> — <%= e.customer_name %></option>
+      <% }) %>
+    </select>
+  </div>
+
+  <div class="form-group field-from-schedule">
+    <label>Dari Jadwal (Reschedule)</label>
+    <select name="from_schedule_id" id="from_schedule_id">
+      <option value="">-- Pilih --</option>
+      <% schedule.forEach(s => { %>
+      <option value="<%= s.id %>"><%= new Date(s.date).toLocaleDateString('id-ID') %> — Sesi <%= s.session_no %></option>
+      <% }) %>
+    </select>
+  </div>
+
+  <div class="form-group field-to-schedule">
+    <label>Ke Jadwal (Reschedule)</label>
+    <select name="to_schedule_id" id="to_schedule_id">
+      <option value="">-- Pilih --</option>
+      <% schedule.forEach(s => { %>
+      <option value="<%= s.id %>"><%= new Date(s.date).toLocaleDateString('id-ID') %> — Sesi <%= s.session_no %></option>
+      <% }) %>
+    </select>
+  </div>
+
+  <div class="form-group field-reason">
+    <label>Alasan</label>
+    <textarea name="reason" id="reason" rows="2" placeholder="Alasan cancel/reschedule/refund..."></textarea>
+  </div>
+
+  <div class="form-group">
+    <label>Admin</label>
+    <input type="text" name="admin" value="admin">
+  </div>
+
+  <div class="form-group">
+    <label>Catatan</label>
+    <textarea name="notes" id="notes" rows="2" placeholder="Catatan tambahan..."></textarea>
+  </div>
+
+  </div>
+
+    <button type="submit">Simpan Transaksi</button>
+</form>

@@ -1,0 +1,59 @@
+<h1>Jadwal Kelas <small><span id="row-count"><%= schedule.length %></span> slot</small></h1>
+
+<input type="search" id="table-search" placeholder="Cari tanggal / coach / nama peserta…" style="width:100%;max-width:340px;margin-bottom:.75rem" autocomplete="off">
+
+<details>
+<summary>Tambah Slot Baru</summary>
+<form method="post" action="/jadwal/tambah" class="inline-form">
+  <input type="date" name="date" required>
+  <input type="number" name="session_no" placeholder="Sesi ke-" min="1" max="10" required>
+  <input type="text" name="time" placeholder="Jam (HH:MM)" pattern="\d{2}:\d{2}">
+  <input type="text" name="coach" placeholder="Coach">
+  <select name="class_name" required>
+    <option value="">Pilih kelas</option>
+    <option>Basic</option>
+    <option>Special Class</option>
+    <option>Jumpboard</option>
+    <option>Flou</option>
+  </select>
+  <input type="number" name="quota" placeholder="Kuota" value="6" min="1" max="20">
+  <button type="submit">Tambah</button>
+</form>
+</details>
+
+<table>
+  <tr>
+    <th>Tanggal</th><th>Sesi</th><th>Jam</th><th>Coach</th><th>Kelas</th>
+    <th class="num">Kuota</th><th class="num">Hold</th><th class="num">Booking</th><th class="num">Sisa</th><th>Status</th><th>Peserta</th><th></th>
+  </tr>
+  <% let currentDate = ''; %>
+  <% schedule.forEach(s => { %>
+  <% const isNewDate = s.date !== currentDate; if (isNewDate) currentDate = s.date; %>
+  <tr class="<%= isNewDate ? 'date-separator' : '' %>">
+    <td><%= isNewDate ? new Date(s.date).toLocaleDateString('id-ID', { weekday:'long', day:'numeric', month:'long' }) : '' %></td>
+    <td>Sesi <%= s.session_no %></td>
+    <td><strong><%= s.time || '-' %></strong></td>
+    <td><%= s.coach || '-' %></td>
+    <td><%= s.class_name %></td>
+    <td class="num"><%= s.quota %></td>
+    <td class="num"><%= s.hold %></td>
+    <td class="num"><%= s.confirmed %></td>
+    <td class="num"><strong><%= s.sisa %></strong></td>
+    <td><span class="status-badge status-<%= s.status.toLowerCase().replace(/\s+/g,'-') %>"><%= s.status %></span></td>
+    <td class="participants">
+      <% s.participants.forEach(p => { %>
+        <span class="participant <%= p.status %>"><%= p.customer_name %></span>
+      <% }) %>
+      <% s.waitlistEntries.forEach(p => { %>
+        <span class="participant waitlist">WL: <%= p.customer_name %></span>
+      <% }) %>
+      <% if (!s.participants.length && !s.waitlistEntries.length) { %><span style="color:var(--text-light);font-size:.72rem">-</span><% } %>
+    </td>
+    <td>
+      <form method="post" action="/jadwal/<%= s.id %>/hapus" onsubmit="return confirm('Hapus slot sesi <%= s.session_no %>?')">
+        <button class="btn-small btn-danger">Hapus</button>
+      </form>
+    </td>
+  </tr>
+  <% }) %>
+</table>

@@ -1,0 +1,34 @@
+<h1>Dashboard</h1>
+
+<div class="cards">
+  <a href="/jadwal" class="card" style="text-decoration:none;display:block">
+    <h3><%= scheduleCount %></h3>
+    <p>Total Slot Jadwal</p>
+  </a>
+  <a href="/hold" class="card<%= holdCount > 0 ? ' danger' : '' %>" style="text-decoration:none;display:block">
+    <h3><%= holdCount %></h3>
+    <p>Menunggu Konfirmasi</p>
+  </a>
+  <a href="/transaksi/baru" class="card warning" style="text-decoration:none;display:block">
+    <h3>+</h3>
+    <p>Input Transaksi Baru</p>
+  </a>
+</div>
+
+<h2>Jadwal Hari Ini</h2>
+<% if (todaySchedule.length) { %>
+<table>
+  <tr><th>Jam</th><th>Kelas</th><th>Coach</th><th class="num">Sisa</th><th>Status</th></tr>
+  <% todaySchedule.forEach(s => { %>
+  <tr>
+    <td><strong><%= s.time %></strong></td>
+    <td><%= s.class_name %></td>
+    <td><%= s.coach || '-' %></td>
+    <td class="num"><strong><%= s.sisa %></strong></td>
+    <td><span class="status-badge status-<%= s.status.toLowerCase().replace(/\s+/g,'-') %>"><%= s.status %></span></td>
+  </tr>
+  <% }) %>
+</table>
+<% } else { %>
+<p class="empty">Tidak ada jadwal untuk hari ini.</p>
+<% } %>

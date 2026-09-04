@@ -1,0 +1,19 @@
+{
+  "name": "sawiji-pilates",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "seed": "node seed.js",
+    "test": "node --test test.js"
+  },
+  "dependencies": {
+    "@libsql/client": "^0.18.0",
+    "ejs": "^3.1.10",
+    "express": "^4.22.2",
+    "express-ejs-layouts": "^2.5.1"
+  },
+  "devDependencies": {
+    "xlsx": "^0.18.5"
+  }
+}

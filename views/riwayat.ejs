@@ -1,0 +1,50 @@
+<h1>Riwayat Transaksi <small><span id="row-count"><%= ledger.length %></span></small></h1>
+
+<input type="search" id="table-search" placeholder="Cari nama / jenis / nominal…" style="width:100%;max-width:340px;margin-bottom:.75rem" autocomplete="off">
+
+<form method="get" action="/riwayat" class="filter-form">
+  <select name="type">
+    <option value="">Semua jenis</option>
+    <option value="booking_new" <%= filters.type === 'booking_new' ? 'selected' : '' %>>Booking Baru</option>
+    <option value="payment" <%= filters.type === 'payment' ? 'selected' : '' %>>Payment</option>
+    <option value="session_use" <%= filters.type === 'session_use' ? 'selected' : '' %>>Pakai Sesi</option>
+    <option value="add_package" <%= filters.type === 'add_package' ? 'selected' : '' %>>Tambah Paket</option>
+    <option value="reschedule" <%= filters.type === 'reschedule' ? 'selected' : '' %>>Reschedule</option>
+    <option value="cancel" <%= filters.type === 'cancel' ? 'selected' : '' %>>Cancel</option>
+    <option value="refund" <%= filters.type === 'refund' ? 'selected' : '' %>>Refund</option>
+    <option value="transfer" <%= filters.type === 'transfer' ? 'selected' : '' %>>Transfer Sesi</option>
+  </select>
+  <input type="text" name="customer" placeholder="Cari nama customer" value="<%= filters.customer || '' %>" autocomplete="off">
+  <input type="date" name="startDate" value="<%= filters.startDate || '' %>">
+  <input type="date" name="endDate" value="<%= filters.endDate || '' %>">
+  <button type="submit">Filter</button>
+  <% if (Object.values(filters).some(Boolean)) { %><a href="/riwayat" class="btn-small" style="background:#eee;color:#666;padding:.35rem .6rem;border-radius:4px;text-decoration:none">Reset</a><% } %>
+</form>
+
+<table>
+  <tr>
+    <th>#</th><th>Tgl</th><th>Jenis</th><th>Customer</th><th>HP</th><th class="num">Sesi</th><th class="num">Nominal</th><th>Status Bayar</th><th>Dibayar</th><th>Ref</th><th>Admin</th><th></th>
+  </tr>
+  <% ledger.forEach(e => { %>
+  <tr>
+    <td style="color:var(--text-light)">#<%= e.id %></td>
+    <td><%= new Date(e.created_at).toLocaleDateString('id-ID') %></td>
+    <td class="type-<%= e.type %>"><%= e.type.replace(/_/g, ' ') %></td>
+    <td><strong><%= e.customer_name || '-' %></strong></td>
+    <td style="font-size:.75rem;color:var(--text-light)"><%= e.phone || '-' %></td>
+    <td class="num"><%= e.session_count || '-' %></td>
+    <td class="num"><%= e.nominal ? 'Rp ' + Number(e.nominal).toLocaleString('id-ID') : '-' %></td>
+    <td><%= e.payment_status || '-' %></td>
+    <td><%= e.paid_by || '-' %></td>
+    <td>
+      <% if (e.refTransaction) { %>
+        <a href="/riwayat?customer=<%= encodeURIComponent(e.refTransaction.customer_name) %>" style="color:var(--primary)">#<%= e.refTransaction.id %></a>
+      <% } else if (e.ref_id) { %>
+        #<%= e.ref_id %>
+      <% } else { %>-<% } %>
+    </td>
+    <td style="font-size:.75rem;color:var(--text-light)"><%= e.admin || '-' %></td>
+    <td><a href="/transaksi/<%= e.id %>/template" class="btn-small btn-copy" style="text-decoration:none;color:#fff;padding:.2rem .4rem;font-size:.72rem">Pesan</a></td>
+  </tr>
+  <% }) %>
+</table>

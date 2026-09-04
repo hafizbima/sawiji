@@ -1,0 +1,28 @@
+<h1>Menunggu Konfirmasi <small><%= hold.length %></small></h1>
+<% if (!hold.length) { %>
+<p class="empty">✅ Semua sudah terkonfirmasi. Tidak ada yang menunggu.</p>
+<% } else { %>
+<datalist id="methods"><option>QRIS</option><option>Transfer</option><option>Tunai</option></datalist>
+<table>
+  <tr>
+    <th>Customer</th><th>No. HP</th><th>Kelas</th><th>Tanggal</th><th>Jam</th><th>Konfirmasi</th>
+  </tr>
+  <% hold.forEach(b => { %>
+  <tr>
+    <td><strong><%= b.customer_name %></strong></td>
+    <td><%= b.phone || '-' %></td>
+    <td><span class="status-badge status-tersedia"><%= b.class_name %></span></td>
+    <td><%= new Date(b.date).toLocaleDateString('id-ID') %></td>
+    <td><%= b.time %></td>
+    <td>
+      <form method="post" action="/hold/<%= b.id %>/confirm" class="hold-confirm inline-form">
+        <input type="text" name="paid_by" placeholder="Dibayar oleh" style="width:110px">
+        <input type="text" name="payment_method" placeholder="Metode" list="methods" style="width:90px">
+        <input type="number" name="nominal" placeholder="Rp" step="1000" style="width:90px">
+        <button type="submit" class="btn-small">✓ Konfirmasi</button>
+      </form>
+    </td>
+  </tr>
+  <% }) %>
+</table>
+<% } %>
