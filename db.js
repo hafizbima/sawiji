@@ -134,8 +134,10 @@ async function rebuildFromLedger() {
 }
 
 async function getSchedule() {
-  const s = await db.execute('SELECT * FROM schedule ORDER BY date, session_no');
-  const b = await db.execute("SELECT * FROM bookings WHERE status IN ('hold','confirmed','waitlist') ORDER BY id");
+  const [s, b] = await Promise.all([
+    db.execute('SELECT * FROM schedule ORDER BY date, session_no'),
+    db.execute("SELECT * FROM bookings WHERE status IN ('hold','confirmed','waitlist') ORDER BY id")
+  ]);
   const bySlot = new Map();
   for (const r of b.rows) {
     if (!bySlot.has(r.schedule_id)) bySlot.set(r.schedule_id, []);
@@ -163,17 +165,18 @@ async function getHoldQueue() {
 }
 
 async function getLedger({ type, customer, startDate, endDate } = {}) {
-  let sql = 'SELECT * FROM ledger WHERE 1=1';
+  let sql = `SELECT l.*, r.id AS r_ref_id, r.type AS r_ref_type, r.customer_name AS r_ref_customer
+    FROM ledger l LEFT JOIN ledger r ON l.ref_id = r.id WHERE 1=1`;
   const args = [];
-  if (type) { sql += ' AND type = ?'; args.push(type); }
-  if (customer) { sql += ' AND customer_name LIKE ?'; args.push(`%${customer}%`); }
-  if (startDate) { sql += ' AND date(created_at) >= ?'; args.push(startDate); }
-  if (endDate) { sql += ' AND date(created_at) <= ?'; args.push(endDate); }
-  sql += ' ORDER BY id DESC';
+  if (type) { sql += ' AND l.type = ?'; args.push(type); }
+  if (customer) { sql += ' AND l.customer_name LIKE ?'; args.push(`%${customer}%`); }
+  if (startDate) { sql += ' AND date(l.created_at) >= ?'; args.push(startDate); }
+  if (endDate) { sql += ' AND date(l.created_at) <= ?'; args.push(endDate); }
+  sql += ' ORDER BY l.id DESC';
   const entries = (await db.execute({ sql, args })).rows;
   for (const e of entries) {
-    e.refTransaction = e.ref_id
-      ? (await db.execute('SELECT id, type, customer_name FROM ledger WHERE id = ?', [e.ref_id])).rows[0] || null
+    e.refTransaction = e.r_ref_id
+      ? { id: e.r_ref_id, type: e.r_ref_type, customer_name: e.r_ref_customer }
       : null;
   }
   return entries;
