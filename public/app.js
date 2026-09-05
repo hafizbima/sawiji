@@ -127,6 +127,25 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
+  // Absensi: tanggal -> isi dropdown sesi; status Reschedule -> tampilkan sesi pengganti
+  const attDate = document.getElementById('att-date');
+  if (attDate) {
+    const sessionSel = document.getElementById('att-session');
+    const replSel = document.getElementById('att-replacement');
+    const statusSel = document.getElementById('att-status');
+    const replField = document.getElementById('field-replacement');
+    attDate.addEventListener('change', async function() {
+      sessionSel.innerHTML = '<option value="">— memuat… —</option>';
+      const list = await fetch('/api/jadwal?date=' + this.value).then(r => r.json());
+      const opts = list.map(s => `<option value="${s.id}">Sesi ${s.session_no} (${s.time}) ${s.class_name} — ${s.coach || '-'} [sisa ${s.sisa}]</option>`).join('');
+      sessionSel.innerHTML = '<option value="">— pilih sesi —</option>' + opts;
+      replSel.innerHTML = '<option value="">— pilih sesi pengganti —</option>' + opts;
+    });
+    statusSel.addEventListener('change', function() {
+      replField.style.display = this.value === 'Reschedule' ? '' : 'none';
+    });
+  }
+
   // Auto-dismiss alerts
   document.querySelectorAll('.flash').forEach(el => {
     setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 3000);

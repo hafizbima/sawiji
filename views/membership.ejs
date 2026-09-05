@@ -1,0 +1,26 @@
+<h1>Membership <small><%= members.length %> member aktif &amp; lama</small></h1>
+
+<input type="search" id="table-search" placeholder="Cari nama / paket…" style="width:100%;max-width:340px;margin-bottom:.75rem" autocomplete="off">
+
+<% if (!members.length) { %><p class="empty">Belum ada konsumen dengan paket kelas.</p><% } else { %>
+<table>
+  <tr>
+    <th>Kode</th><th>Nama</th><th>Paket</th><th class="num">Kuota</th><th class="num">Terpakai</th><th class="num">Sisa</th>
+    <th>Kelas Pertama</th><th>Kelas Terakhir</th><th>Berlaku s/d</th><th>Status</th>
+  </tr>
+  <% members.forEach(m => { %>
+  <tr onclick="location='/konsumen/<%= m.id %>'" style="cursor:pointer">
+    <td style="color:var(--text-light)"><%= m.code %></td>
+    <td><strong><%= m.name %></strong></td>
+    <td><%= m.package %></td>
+    <td class="num"><%= m.membership.quota %></td>
+    <td class="num"><%= m.membership.used %></td>
+    <td class="num"><strong><%= m.membership.sisa %></strong></td>
+    <td style="font-size:.75rem"><%= m.membership.first || '-' %></td>
+    <td style="font-size:.75rem"><%= m.membership.last || '-' %></td>
+    <td style="font-size:.75rem"><%= m.membership.validUntil || '-' %></td>
+    <td><span class="status-badge <%= m.membership.state === 'Aktif' ? 'status-tersedia' : m.membership.state === 'Kedaluwarsa' || m.membership.state === 'Kelas Habis' ? 'status-full' : 'status-hampir-penuh' %>"><%= m.membership.state %></span></td>
+  </tr>
+  <% }) %>
+</table>
+<% } %>

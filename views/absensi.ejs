@@ -1,0 +1,62 @@
+<h1>Absensi Kelas</h1>
+
+<form method="post" action="/absensi" id="absensi-form" style="background:var(--card);padding:1.25rem;border-radius:var(--radius);box-shadow:var(--shadow);max-width:760px;margin-bottom:1.5rem">
+  <div class="form-grid">
+    <div class="form-group">
+      <label>Tanggal Sesi</label>
+      <input type="date" id="att-date" required>
+    </div>
+    <div class="form-group">
+      <label>Sesi</label>
+      <select name="session_id" id="att-session" required>
+        <option value="">— pilih tanggal dulu —</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Konsumen</label>
+      <select name="consumer_id" id="att-consumer" required>
+        <option value="">— pilih konsumen —</option>
+        <% consumers.forEach(c => { %>
+        <option value="<%= c.id %>"><%= c.code %> — <%= c.name %></option>
+        <% }) %>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Status</label>
+      <select name="status" id="att-status" required>
+        <option>Hadir</option>
+        <option>Reminding</option>
+        <option>Reschedule</option>
+        <option>Tidak Hadir</option>
+        <option>Refund</option>
+      </select>
+    </div>
+    <div class="form-group" id="field-replacement" style="display:none">
+      <label>Sesi Pengganti (Reschedule)</label>
+      <select name="replacement_id" id="att-replacement">
+        <option value="">— pilih sesi pengganti —</option>
+      </select>
+    </div>
+  </div>
+  <button type="submit">Simpan Absensi</button>
+</form>
+
+<% if (locals.error) { %><p class="error"><%= error %></p><% } %>
+
+<h2>Log Terakhir</h2>
+<% if (!attendance.length) { %><p class="empty">Belum ada absensi tercatat.</p><% } else { %>
+<table>
+  <tr><th>Waktu</th><th>Konsumen</th><th>Tanggal</th><th>Jam</th><th>Kelas</th><th>Coach</th><th>Status</th></tr>
+  <% attendance.forEach(a => { %>
+  <tr>
+    <td style="font-size:.75rem;color:var(--text-light)"><%= new Date(a.created_at).toLocaleString('id-ID', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' }) %></td>
+    <td><strong><%= a.name %></strong> <span style="color:var(--text-light);font-size:.72rem"><%= a.code %></span></td>
+    <td><%= a.date %></td>
+    <td><%= a.time %></td>
+    <td><%= a.class_name %></td>
+    <td><%= a.coach %></td>
+    <td><span class="status-badge <%= a.status === 'Hadir' ? 'status-tersedia' : a.status === 'Tidak Hadir' || a.status === 'Refund' ? 'status-full' : 'status-hampir-penuh' %>"><%= a.status %></span></td>
+  </tr>
+  <% }) %>
+</table>
+<% } %>

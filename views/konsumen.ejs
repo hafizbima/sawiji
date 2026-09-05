@@ -1,0 +1,44 @@
+<h1>Data Konsumen <small><span id="row-count"><%= consumers.length %></span></small></h1>
+
+<input type="search" id="table-search" placeholder="Cari nama / HP / kode…" style="width:100%;max-width:340px;margin-bottom:.75rem" autocomplete="off">
+
+<details>
+<summary>Tambah Konsumen</summary>
+<form method="post" action="/konsumen" class="inline-form">
+  <input type="text" name="name" placeholder="Nama Lengkap *" required>
+  <input type="text" name="phone" placeholder="No. HP">
+  <input type="text" name="instagram" placeholder="Instagram">
+  <input type="date" name="birth_date" title="Tgl lahir">
+  <select name="package">
+    <option value="Non-member">Non-member</option>
+    <option value="10 Kelas">10 Kelas</option>
+    <option value="15 Kelas">15 Kelas</option>
+  </select>
+  <input type="text" name="condition" placeholder="Kondisi khusus (opsional)">
+  <button type="submit">Simpan</button>
+</form>
+</details>
+
+<% if (locals.error) { %><p class="error"><%= error %></p><% } %>
+
+<table>
+  <tr>
+    <th>Kode</th><th>Nama</th><th>HP</th><th>IG</th><th>Tgl Lahir</th><th>Status</th><th>Paket</th>
+    <th class="num">Hadir</th><th>Sisa Kuota</th><th>Kelas Terakhir</th><th>Kondisi Khusus</th>
+  </tr>
+  <% consumers.forEach(c => { %>
+  <tr onclick="location='/konsumen/<%= c.id %>'" style="cursor:pointer">
+    <td style="color:var(--text-light)"><%= c.code %></td>
+    <td><strong><%= c.name %></strong></td>
+    <td style="font-size:.75rem"><%= c.phone || '-' %></td>
+    <td style="font-size:.75rem"><%= c.instagram ? '@' + c.instagram : '-' %></td>
+    <td style="font-size:.75rem"><%= c.birth_date || '-' %></td>
+    <td><span class="status-badge <%= c.status === 'Member' ? 'status-tersedia' : 'status-hampir-penuh' %>"><%= c.status %></span></td>
+    <td><%= c.package %></td>
+    <td class="num"><%= c.totalHadir %></td>
+    <td class="num"><%= c.membership.sisa || '-' %></td>
+    <td style="font-size:.75rem"><%= c.lastClass || '-' %></td>
+    <td style="font-size:.75rem;color:var(--text-light)"><%= c.condition || '' %></td>
+  </tr>
+  <% }) %>
+</table>

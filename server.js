@@ -2,7 +2,8 @@ const express = require('express');
 const layouts = require('express-ejs-layouts');
 const crypto = require('crypto');
 const path = require('path');
-const { init, getSchedule, getHoldQueue, getLedger, addTransaction, addSchedule, deleteSchedule } = require('./db');
+const { init, getSchedule, getHoldQueue, getLedger, addTransaction, addSchedule, deleteSchedule,
+  addConsumer, getConsumers, getConsumer, addAttendance, getAttendance } = require('./db');
 
 const PORT = process.env.PORT || 3000;
 const PASSWORD = process.env.PASSWORD || 'sawiji';
@@ -196,6 +197,61 @@ app.get('/export/:what', async (req, res, next) => {
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="${req.params.what}"`);
     res.send('\uFEFF' + body); // BOM agar Excel baca UTF-8 benar
+  } catch (e) { next(e); }
+});
+
+app.get('/konsumen', async (req, res, next) => {
+  try {
+    res.render('konsumen', { consumers: await getConsumers(req.query.q || null), error: req.query.err || null });
+  } catch (e) { next(e); }
+});
+
+app.post('/konsumen', async (req, res, next) => {
+  try {
+    await addConsumer(req.body);
+    res.redirect('/konsumen');
+  } catch (e) {
+    if (e.message === 'NAMA SUDAH TERDAFTAR' || e.message === 'Nama wajib diisi') return res.redirect('/konsumen?err=' + encodeURIComponent(e.message));
+    next(e);
+  }
+});
+
+app.get('/konsumen/:id', async (req, res, next) => {
+  try {
+    const data = await getConsumer(Number(req.params.id));
+    if (!data) return res.status(404).send('Konsumen tidak ditemukan');
+    res.render('konsumen-detail', data);
+  } catch (e) { next(e); }
+});
+
+app.get('/absensi', async (req, res, next) => {
+  try {
+    const consumers = await getConsumers();
+    const attendance = await getAttendance();
+    res.render('absensi', { consumers, attendance, error: req.query.err || null });
+  } catch (e) { next(e); }
+});
+
+app.post('/absensi', async (req, res, next) => {
+  try {
+    await addAttendance({
+      consumer_id: Number(req.body.consumer_id),
+      session_id: Number(req.body.session_id),
+      status: req.body.status,
+      replacement_id: req.body.replacement_id ? Number(req.body.replacement_id) : null,
+      admin: req.body.admin || 'admin'
+    });
+    res.redirect('/absensi');
+  } catch (e) {
+    if (/sudah|wajib|tidak ditemukan|tidak dikenal/i.test(e.message)) return res.redirect('/absensi?err=' + encodeURIComponent(e.message));
+    next(e);
+  }
+});
+
+app.get('/membership', async (req, res, next) => {
+  try {
+    const all = await getConsumers();
+    res.render('membership', { members: all.filter(c => c.package !== 'Non-member') });
   } catch (e) { next(e); }
 });
 

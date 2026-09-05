@@ -40,6 +40,27 @@ CREATE TABLE IF NOT EXISTS bookings (
   paid_by TEXT,
   created_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS consumers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  code TEXT UNIQUE,
+  name TEXT NOT NULL,
+  phone TEXT,
+  instagram TEXT,
+  birth_date TEXT,
+  status TEXT NOT NULL DEFAULT 'Non-member',
+  package TEXT NOT NULL DEFAULT 'Non-member',
+  condition TEXT,
+  registered_at TEXT
+);
+CREATE TABLE IF NOT EXISTS attendance (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  created_at TEXT NOT NULL,
+  consumer_id INTEGER NOT NULL,
+  session_id INTEGER NOT NULL,
+  status TEXT NOT NULL,
+  replacement_id INTEGER,
+  admin TEXT
+);
 `;
 
 function init(url, authToken) {
@@ -197,7 +218,7 @@ async function addTransaction(data, skipRebuild) {
 async function addSchedule(data) {
   const r = await db.execute({
     sql: 'INSERT INTO schedule (date, session_no, time, coach, class_name, quota) VALUES (?,?,?,?,?,?)',
-    args: [data.date, data.session_no, data.time, data.coach, data.class_name, data.quota || 6]
+    args: [data.date, data.session_no, data.time ?? null, data.coach ?? null, data.class_name, data.quota || 6]
   });
   return Number(r.lastInsertRowid);
 }
@@ -212,4 +233,100 @@ async function deleteSchedule(id) {
   return true;
 }
 
-module.exports = { init, rebuildFromLedger, getSchedule, getHoldQueue, getLedger, addTransaction, addSchedule, deleteSchedule, getDB, STATES };
+module.exports = { init, rebuildFromLedger, getSchedule, getHoldQueue, getLedger, addTransaction, addSchedule, deleteSchedule, getDB, STATES,
+  addConsumer, getConsumers, getConsumer, addAttendance, getAttendance, getMembership };
+
+const PACKAGES = { '10 Kelas': { quota: 10, weeks: 5 }, '15 Kelas': { quota: 15, weeks: 7 } };
+const ATTEND_STATUSES = ['Hadir', 'Reminding', 'Reschedule', 'Tidak Hadir', 'Refund'];
+
+function membershipOf(consumer, attRows, sessionDates) {
+  const pkg = PACKAGES[consumer.package];
+  const used = attRows.filter(a => a.status === 'Hadir' || a.status === 'Reminding').length;
+  const hadirDates = attRows.filter(a => a.status === 'Hadir').map(a => sessionDates.get(a.session_id)).filter(Boolean).sort();
+  const first = hadirDates[0] || null, last = hadirDates[hadirDates.length - 1] || null;
+  let validUntil = null, state = 'Non-member';
+  if (pkg) {
+    state = 'Aktif';
+    if (first) {
+      const d = new Date(first + 'T00:00:00');
+      d.setDate(d.getDate() + pkg.weeks * 7);
+      validUntil = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; // lokal, bukan toISOString (WIB = UTC+7)
+    }
+    if (pkg.quota - used <= 0) state = 'Kelas Habis';
+    else if (validUntil && validUntil < new Date().toLocaleDateString('sv')) state = 'Kedaluwarsa';
+  }
+  return { quota: pkg ? pkg.quota : 0, used, sisa: pkg ? pkg.quota - used : 0, first, last, validUntil, state };
+}
+
+async function getMembership(consumerId) {
+  const c = (await db.execute({ sql: 'SELECT * FROM consumers WHERE id = ?', args: [consumerId] })).rows[0];
+  if (!c) return null;
+  const att = (await db.execute({ sql: 'SELECT * FROM attendance WHERE consumer_id = ?', args: [consumerId] })).rows;
+  const s = await db.execute('SELECT id, date FROM schedule');
+  const dates = new Map(s.rows.map(r => [r.id, r.date]));
+  return { consumer: c, membership: membershipOf(c, att, dates) };
+}
+
+async function addConsumer(data) {
+  const name = (data.name || '').trim();
+  if (!name) throw new Error('Nama wajib diisi');
+  const dup = (await db.execute({ sql: 'SELECT id FROM consumers WHERE LOWER(TRIM(name)) = ?', args: [name.toLowerCase()] })).rows[0];
+  if (dup) throw new Error('NAMA SUDAH TERDAFTAR');
+  const last = (await db.execute('SELECT code FROM consumers ORDER BY id DESC LIMIT 1')).rows[0];
+  const next = last ? 'K' + String(parseInt(last.code.slice(1)) + 1).padStart(4, '0') : 'K0001';
+  const pkg = PACKAGES[data.package] ? data.package : 'Non-member';
+  const r = await db.execute({
+    sql: 'INSERT INTO consumers (code, name, phone, instagram, birth_date, status, package, condition, registered_at) VALUES (?,?,?,?,?,?,?,?,?)',
+    args: [next, name, data.phone || null, data.instagram || null, data.birth_date || null, pkg === 'Non-member' ? 'Non-member' : 'Member', pkg, data.condition || null, data.registered_at || new Date().toISOString().slice(0, 10)]
+  });
+  return Number(r.lastInsertRowid);
+}
+
+async function getConsumers(q) {
+  let sql = 'SELECT * FROM consumers';
+  const args = [];
+  if (q) { sql += ' WHERE LOWER(name) LIKE ? OR phone LIKE ? OR code LIKE ?'; args.push(`%${q.toLowerCase()}%`, `%${q}%`, `%${q.toUpperCase()}%`); }
+  sql += ' ORDER BY code';
+  const rows = (await db.execute({ sql, args })).rows;
+  const att = (await db.execute('SELECT consumer_id, status, session_id FROM attendance')).rows;
+  const s = await db.execute('SELECT id, date FROM schedule');
+  const dates = new Map(s.rows.map(r => [r.id, r.date]));
+  return rows.map(c => {
+    const mine = att.filter(a => a.consumer_id === c.id);
+    const m = membershipOf(c, mine, dates);
+    return { ...c, totalHadir: mine.filter(a => a.status === 'Hadir').length, lastClass: m.last, membership: m };
+  });
+}
+
+async function getConsumer(id) {
+  const c = (await db.execute({ sql: 'SELECT * FROM consumers WHERE id = ?', args: [id] })).rows[0];
+  if (!c) return null;
+  const att = (await db.execute({ sql: 'SELECT a.*, s.date, s.time, s.class_name, s.coach FROM attendance a LEFT JOIN schedule s ON a.session_id = s.id WHERE a.consumer_id = ? ORDER BY a.id DESC', args: [id] })).rows;
+  const s = await db.execute('SELECT id, date FROM schedule');
+  const dates = new Map(s.rows.map(r => [r.id, r.date]));
+  return { consumer: c, attendance: att, membership: membershipOf(c, att, dates) };
+}
+
+async function addAttendance(data) {
+  if (!ATTEND_STATUSES.includes(data.status)) throw new Error('Status tidak dikenal');
+  const c = (await db.execute({ sql: 'SELECT id, name FROM consumers WHERE id = ?', args: [data.consumer_id] })).rows[0];
+  if (!c) throw new Error('Konsumen tidak ditemukan');
+  const dup = (await db.execute({ sql: 'SELECT id FROM attendance WHERE consumer_id = ? AND session_id = ?', args: [data.consumer_id, data.session_id] })).rows[0];
+  if (dup) throw new Error('Konsumen sudah punya log di sesi ini');
+  if (data.status === 'Reschedule' && !data.replacement_id) throw new Error('Reschedule wajib pilih sesi pengganti');
+  const r = await db.execute({
+    sql: 'INSERT INTO attendance (created_at, consumer_id, session_id, status, replacement_id, admin) VALUES (?,?,?,?,?,?)',
+    args: [new Date().toISOString(), data.consumer_id, data.session_id, data.status, data.replacement_id || null, data.admin || 'admin']
+  });
+  return Number(r.lastInsertRowid);
+}
+
+async function getAttendance({ sessionId, consumerId } = {}) {
+  let sql = `SELECT a.*, c.name AS name, c.code, s.date, s.time, s.class_name, s.coach
+    FROM attendance a JOIN consumers c ON a.consumer_id = c.id LEFT JOIN schedule s ON a.session_id = s.id WHERE 1=1`;
+  const args = [];
+  if (sessionId) { sql += ' AND a.session_id = ?'; args.push(sessionId); }
+  if (consumerId) { sql += ' AND a.consumer_id = ?'; args.push(consumerId); }
+  sql += ' ORDER BY a.id DESC LIMIT 500';
+  return (await db.execute({ sql, args })).rows;
+}

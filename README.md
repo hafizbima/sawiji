@@ -9,6 +9,9 @@ Dashboard internal untuk menggantikan Excel + tracking manual WhatsApp di **Sawi
 - **Transaksi Baru** — form dinamis per jenis transaksi (Booking Baru, Payment, Pakai Sesi Member, Tambah Paket, Reschedule, Cancel, Refund, Transfer Sesi).
 - **Riwayat (Ledger)** — append-only, 1 baris = 1 kejadian; filter jenis/customer/tanggal; tautan antar-transaksi via Ref ID.
 - **Template Pesan WA** — teks terima kasih siap salin per transaksi.
+- **Database Konsumen** — master 293 konsumen (K0001+, profil, kondisi khusus), pencarian instan.
+- **Membership** — kuota paket 10 Kelas (5 minggu) / 15 Kelas (7 minggu), sisa kuota & status Aktif/Kedaluwarsa/Habis dihitung dari absensi.
+- **Absensi** — log kehadiran per sesi (Hadir/Reminding/Reschedule/Tidak Hadir/Refund), reschedule ke sesi pengganti, validasi anti log ganda.
 - Badge jumlah antrian konfirmasi di nav, filter tabel instan tanpa request server.
 
 ## Stack

@@ -1,0 +1,31 @@
+<h1><%= consumer.name %> <small><%= consumer.code %></small></h1>
+<p><a href="/konsumen">← Semua konsumen</a></p>
+
+<div class="cards">
+  <div class="card"><h3><%= membership.used %></h3><p>Kelas Terpakai</p></div>
+  <div class="card"><h3><%= membership.sisa %></h3><p>Sisa Kuota</p></div>
+  <div class="card<%= membership.state === 'Kedaluwarsa' || membership.state === 'Kelas Habis' ? ' danger' : '' %>"><h3 style="font-size:1.2rem;padding-top:.5rem"><%= membership.state %></h3><p>Status Membership</p></div>
+</div>
+
+<table style="max-width:640px;margin-bottom:1.5rem">
+  <tr><td><strong>No. HP</strong></td><td><%= consumer.phone || '-' %></td><td><strong>Instagram</strong></td><td><%= consumer.instagram ? '@' + consumer.instagram : '-' %></td></tr>
+  <tr><td><strong>Tgl Lahir</strong></td><td><%= consumer.birth_date || '-' %></td><td><strong>Terdaftar</strong></td><td><%= consumer.registered_at || '-' %></td></tr>
+  <tr><td><strong>Paket</strong></td><td><%= consumer.package %></td><td><strong>Berlaku s/d</strong></td><td><%= membership.validUntil || '-' %></td></tr>
+  <% if (consumer.condition) { %><tr><td><strong>Kondisi Khusus</strong></td><td colspan="3"><%= consumer.condition %></td></tr><% } %>
+</table>
+
+<h2>Riwayat Absensi</h2>
+<% if (!attendance.length) { %><p class="empty">Belum pernah kelas.</p><% } else { %>
+<table>
+  <tr><th>Tanggal</th><th>Jam</th><th>Kelas</th><th>Coach</th><th>Status</th></tr>
+  <% attendance.forEach(a => { %>
+  <tr>
+    <td><%= a.date || '-' %></td>
+    <td><%= a.time || '-' %></td>
+    <td><%= a.class_name || '-' %></td>
+    <td><%= a.coach || '-' %></td>
+    <td><span class="status-badge <%= a.status === 'Hadir' ? 'status-tersedia' : a.status === 'Tidak Hadir' || a.status === 'Refund' ? 'status-full' : 'status-hampir-penuh' %>"><%= a.status %></span></td>
+  </tr>
+  <% }) %>
+</table>
+<% } %>

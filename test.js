@@ -1,6 +1,6 @@
 const { describe, it, before } = require('node:test');
 const assert = require('node:assert/strict');
-const { init, getDB, addSchedule, addTransaction, getSchedule } = require('./db');
+const { init, getDB, addSchedule, addTransaction, getSchedule, addConsumer, getConsumers, getConsumer, addAttendance, getAttendance } = require('./db');
 
 describe('Sawiji Pilates DB', () => {
   before(async () => {
@@ -9,7 +9,7 @@ describe('Sawiji Pilates DB', () => {
 
   async function resetDB() {
     const db = getDB();
-    await db.executeMultiple('DELETE FROM bookings; DELETE FROM ledger; DELETE FROM schedule;');
+    await db.executeMultiple('DELETE FROM bookings; DELETE FROM ledger; DELETE FROM schedule; DELETE FROM attendance; DELETE FROM consumers;');
   }
 
   it('replay: booking_new creates hold', async () => {
@@ -76,5 +76,57 @@ describe('Sawiji Pilates DB', () => {
     const sched = await getSchedule();
     assert.equal(sched[0].confirmed, 1);
     assert.equal(sched[0].hold, 0);
+  });
+
+  it('consumer: duplicate name rejected', async () => {
+    await resetDB();
+    await addConsumer({ name: 'Budi Santoso', phone: '08123' });
+    await assert.rejects(() => addConsumer({ name: '  budi santoso  ' }), /SUDAH TERDAFTAR/);
+  });
+
+  it('consumer: code auto-increments K0001, K0002', async () => {
+    await resetDB();
+    await addConsumer({ name: 'A' });
+    await addConsumer({ name: 'B' });
+    const list = await getConsumers();
+    assert.equal(list[0].code, 'K0001');
+    assert.equal(list[1].code, 'K0002');
+  });
+
+  it('membership: 10 Kelas = 5 minggu dari kelas pertama', async () => {
+    await resetDB();
+    const cid = await addConsumer({ name: 'Member', package: '10 Kelas' });
+    const s1 = await addSchedule({ date: '2026-09-01', session_no: 1, time: '08:00', class_name: 'Basic', quota: 8 });
+    await addAttendance({ consumer_id: cid, session_id: s1, status: 'Hadir' });
+    const { membership } = await getConsumer(cid);
+    assert.equal(membership.quota, 10);
+    assert.equal(membership.used, 1);
+    assert.equal(membership.sisa, 9);
+    assert.equal(membership.first, '2026-09-01');
+    assert.equal(membership.validUntil, '2026-10-06'); // +5 minggu
+    assert.equal(membership.state, 'Aktif');
+  });
+
+  it('membership: habis kuota -> Kelas Habis', async () => {
+    await resetDB();
+    const cid = await addConsumer({ name: 'Full', package: '10 Kelas' });
+    for (let i = 1; i <= 10; i++) {
+      const s = await addSchedule({ date: `2026-09-${String(i).padStart(2, '0')}`, session_no: 1, time: '08:00', class_name: 'Basic', quota: 8 });
+      await addAttendance({ consumer_id: cid, session_id: s, status: 'Hadir' });
+    }
+    const { membership } = await getConsumer(cid);
+    assert.equal(membership.sisa, 0);
+    assert.equal(membership.state, 'Kelas Habis');
+  });
+
+  it('attendance: no double log per session, reschedule needs replacement', async () => {
+    await resetDB();
+    const cid = await addConsumer({ name: 'X' });
+    const s1 = await addSchedule({ date: '2026-09-01', session_no: 1, time: '08:00', class_name: 'Basic', quota: 8 });
+    const s2 = await addSchedule({ date: '2026-09-02', session_no: 1, time: '08:00', class_name: 'Basic', quota: 8 });
+    await addAttendance({ consumer_id: cid, session_id: s1, status: 'Hadir' });
+    await assert.rejects(() => addAttendance({ consumer_id: cid, session_id: s1, status: 'Hadir' }), /sudah punya log/);
+    await assert.rejects(() => addAttendance({ consumer_id: cid, session_id: s2, status: 'Reschedule' }), /wajib pilih sesi pengganti/);
+    await addAttendance({ consumer_id: cid, session_id: s2, status: 'Reschedule', replacement_id: s1 });
   });
 });
