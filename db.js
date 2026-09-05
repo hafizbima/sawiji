@@ -172,7 +172,7 @@ async function getLedger({ type, customer, startDate, endDate } = {}) {
   if (customer) { sql += ' AND l.customer_name LIKE ?'; args.push(`%${customer}%`); }
   if (startDate) { sql += ' AND date(l.created_at) >= ?'; args.push(startDate); }
   if (endDate) { sql += ' AND date(l.created_at) <= ?'; args.push(endDate); }
-  sql += ' ORDER BY l.id DESC';
+  sql += ' ORDER BY l.id DESC LIMIT 500'; // ponytail: 500 terbaru; filter tanggal untuk lebih lama, pagination kalau terasa
   const entries = (await db.execute({ sql, args })).rows;
   for (const e of entries) {
     e.refTransaction = e.r_ref_id

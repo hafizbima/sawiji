@@ -180,6 +180,25 @@ app.get('/transaksi/:id/template', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+app.get('/export/:what', async (req, res, next) => {
+  try {
+    const { getDB } = require('./db');
+    const map = {
+      'ledger.csv': 'SELECT * FROM ledger ORDER BY id',
+      'jadwal.csv': 'SELECT * FROM schedule ORDER BY date, session_no'
+    };
+    const sql = map[req.params.what];
+    if (!sql) return res.status(404).send('Tidak dikenal');
+    const rows = (await getDB().execute(sql)).rows;
+    const esc = v => { v = v == null ? '' : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+    const cols = Object.keys(rows[0] || {});
+    const body = [cols.join(','), ...rows.map(r => cols.map(c => esc(r[c])).join(','))].join('\n');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${req.params.what}"`);
+    res.send('\uFEFF' + body); // BOM agar Excel baca UTF-8 benar
+  } catch (e) { next(e); }
+});
+
 app.get('/api/hold-count', async (req, res, next) => {
   try {
     res.json({ count: (await getHoldQueue()).length });

@@ -1,6 +1,9 @@
 <h1>Riwayat Transaksi <small><span id="row-count"><%= ledger.length %></span></small></h1>
 
 <input type="search" id="table-search" placeholder="Cari nama / jenis / nominal…" style="width:100%;max-width:340px;margin-bottom:.75rem" autocomplete="off">
+<span style="font-size:.8rem;margin-left:.5rem">
+  <a href="/export/ledger.csv">⬇ Ledger CSV</a> · <a href="/export/jadwal.csv">⬇ Jadwal CSV</a>
+</span>
 
 <form method="get" action="/riwayat" class="filter-form">
   <select name="type">
