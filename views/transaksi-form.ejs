@@ -33,6 +33,25 @@
     <input type="text" name="phone" id="phone" autocomplete="off">
   </div>
 
+  <div class="form-group field-consumer">
+    <label>Hubungkan ke Konsumen (opsional)</label>
+    <select name="consumer_id" id="consumer_id">
+      <option value="">— tidak ditautkan —</option>
+      <% consumers.forEach(c => { %>
+      <option value="<%= c.id %>"><%= c.code %> — <%= c.name %></option>
+      <% }) %>
+    </select>
+  </div>
+
+  <div class="form-group field-package">
+    <label>Paket yang Dibeli</label>
+    <select name="package" id="package">
+      <option value="">— pilih paket —</option>
+      <option>10 Kelas</option>
+      <option>15 Kelas</option>
+    </select>
+  </div>
+
   <div class="form-group field-schedule">
     <label>Pilih Slot Jadwal</label>
     <select name="schedule_id" id="schedule_id">

@@ -4,8 +4,27 @@
 <div class="cards">
   <div class="card"><h3><%= membership.used %></h3><p>Kelas Terpakai</p></div>
   <div class="card"><h3><%= membership.sisa %></h3><p>Sisa Kuota</p></div>
-  <div class="card<%= membership.state === 'Kedaluwarsa' || membership.state === 'Kelas Habis' ? ' danger' : '' %>"><h3 style="font-size:1.2rem;padding-top:.5rem"><%= membership.state %></h3><p>Status Membership</p></div>
+  <div class="card<%= membership.state === 'Kedaluwarsa' || membership.state === 'Kelas Habis' ? ' danger' : '' %>"><h3 style="font-size:1.2rem;padding-top:.5rem"><%= membership.state %></h3><p>Status · s/d <%= membership.validUntil || '-' %></p></div>
 </div>
+
+<details>
+<summary>Beli / Perpanjang Paket Kelas</summary>
+<form method="post" action="/konsumen/<%= consumer.id %>/paket" class="inline-form">
+  <select name="package" required>
+    <option value="">Pilih paket</option>
+    <option>10 Kelas</option>
+    <option>15 Kelas</option>
+  </select>
+  <input type="number" name="nominal" placeholder="Nominal (Rp)" step="1000" style="width:130px">
+  <select name="payment_method">
+    <option value="">Metode</option>
+    <option>QRIS</option>
+    <option>Transfer</option>
+    <option>Tunai</option>
+  </select>
+  <button type="submit">Simpan + Tambah Kuota</button>
+</form>
+</details>
 
 <table style="max-width:640px;margin-bottom:1.5rem">
   <tr><td><strong>No. HP</strong></td><td><%= consumer.phone || '-' %></td><td><strong>Instagram</strong></td><td><%= consumer.instagram ? '@' + consumer.instagram : '-' %></td></tr>

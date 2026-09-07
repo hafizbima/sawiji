@@ -1,0 +1,14 @@
+<h1>Pengaturan</h1>
+
+<% if (saved) { %><p class="status-badge status-tersedia" style="display:inline-block;margin-bottom:1rem">Tersimpan ✓</p><% } %>
+
+<div style="background:var(--card);padding:1.5rem;border-radius:var(--radius);box-shadow:var(--shadow);max-width:640px">
+  <h2 style="margin-top:0">Template Pesan Terima Kasih (WA)</h2>
+  <form method="post" action="/pengaturan">
+    <div class="form-group">
+      <label>Isian otomatis: <code>{nama}</code> <code>{kelas}</code> <code>{hari}</code> <code>{jam}</code></label>
+      <textarea name="template" rows="4" style="width:100%;max-width:none"><%= template %></textarea>
+    </div>
+    <button type="submit">Simpan Template</button>
+  </form>
+</div>

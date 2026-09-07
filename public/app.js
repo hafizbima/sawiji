@@ -25,14 +25,14 @@ document.addEventListener('DOMContentLoaded', function() {
   const typeSelect = document.getElementById('type');
   if (typeSelect) {
     const fields = {
-      'booking_new': ['schedule', 'session_count', 'nominal', 'payment_method', 'payment_status'],
-      'payment': ['schedule', 'nominal', 'payment_method', 'payment_status', 'paid_by', 'ref_id'],
-      'session_use': ['schedule', 'session_count'],
-      'add_package': ['session_count', 'nominal', 'payment_method', 'payment_status'],
-      'reschedule': ['from_schedule', 'to_schedule', 'reason'],
-      'cancel': ['schedule', 'reason', 'ref_id'],
-      'refund': ['nominal', 'payment_method', 'reason', 'ref_id'],
-      'transfer': ['session_count', 'reason'],
+      'booking_new': ['schedule', 'session_count', 'nominal', 'payment_method', 'payment_status', 'consumer'],
+      'payment': ['schedule', 'nominal', 'payment_method', 'payment_status', 'paid_by', 'ref_id', 'consumer'],
+      'session_use': ['schedule', 'session_count', 'consumer'],
+      'add_package': ['package', 'session_count', 'nominal', 'payment_method', 'payment_status', 'consumer'],
+      'reschedule': ['from_schedule', 'to_schedule', 'reason', 'consumer'],
+      'cancel': ['schedule', 'reason', 'ref_id', 'consumer'],
+      'refund': ['nominal', 'payment_method', 'reason', 'ref_id', 'consumer'],
+      'transfer': ['session_count', 'reason', 'consumer'],
     };
     function updateFields() {
       const type = typeSelect.value;

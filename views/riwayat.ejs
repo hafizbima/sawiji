@@ -1,4 +1,4 @@
-<h1>Riwayat Transaksi <small><span id="row-count"><%= ledger.length %></span></small></h1>
+<h1>Riwayat Transaksi <small>hal <%= filters.page || 1 %></small></h1>
 
 <input type="search" id="table-search" placeholder="Cari nama / jenis / nominal…" style="width:100%;max-width:340px;margin-bottom:.75rem" autocomplete="off">
 <span style="font-size:.8rem;margin-left:.5rem">
@@ -21,7 +21,7 @@
   <input type="date" name="startDate" value="<%= filters.startDate || '' %>">
   <input type="date" name="endDate" value="<%= filters.endDate || '' %>">
   <button type="submit">Filter</button>
-  <% if (Object.values(filters).some(Boolean)) { %><a href="/riwayat" class="btn-small" style="background:#eee;color:#666;padding:.35rem .6rem;border-radius:4px;text-decoration:none">Reset</a><% } %>
+  <% if (filters.type || filters.customer || filters.startDate || filters.endDate) { %><a href="/riwayat" style="font-size:.8rem;align-self:center">Reset</a><% } %>
 </form>
 
 <table>
@@ -33,7 +33,10 @@
     <td style="color:var(--text-light)">#<%= e.id %></td>
     <td><%= new Date(e.created_at).toLocaleDateString('id-ID') %></td>
     <td class="type-<%= e.type %>"><%= e.type.replace(/_/g, ' ') %></td>
-    <td><strong><%= e.customer_name || '-' %></strong></td>
+    <td>
+      <strong><%= e.customer_name || '-' %></strong>
+      <% if (e.consumer_id) { %><a href="/konsumen/<%= e.consumer_id %>" style="font-size:.72rem"><%= e.consumer_name_link || '→ konsumen' %></a><% } %>
+    </td>
     <td style="font-size:.75rem;color:var(--text-light)"><%= e.phone || '-' %></td>
     <td class="num"><%= e.session_count || '-' %></td>
     <td class="num"><%= e.nominal ? 'Rp ' + Number(e.nominal).toLocaleString('id-ID') : '-' %></td>
@@ -51,3 +54,10 @@
   </tr>
   <% }) %>
 </table>
+
+<div style="display:flex;gap:.5rem;margin-top:1rem;align-items:center">
+  <% const qs = (p) => '?page=' + p + ['type','customer','startDate','endDate'].map(k => filters[k] ? '&' + k + '=' + encodeURIComponent(filters[k]) : '').join(''); %>
+  <% if ((filters.page || 1) > 1) { %><a class="btn-small" style="text-decoration:none;color:#fff;padding:.35rem .7rem;border-radius:6px;background:var(--primary)" href="/riwayat<%= qs((filters.page || 1) - 1) %>">← Sebelumnya</a><% } %>
+  <% if (ledger.length === 500) { %><a class="btn-small" style="text-decoration:none;color:#fff;padding:.35rem .7rem;border-radius:6px;background:var(--primary)" href="/riwayat<%= qs(Number(filters.page || 1) + 1) %>">Berikutnya →</a><% } %>
+  <span style="font-size:.8rem;color:var(--text-light)"><%= ledger.length %> baris ditampilkan (maks 500/halaman)</span>
+</div>

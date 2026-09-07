@@ -2,6 +2,9 @@ const { createClient } = require('@libsql/client');
 
 let db;
 
+const PACKAGES = { '10 Kelas': { quota: 10, weeks: 5 }, '15 Kelas': { quota: 15, weeks: 7 } };
+const ATTEND_STATUSES = ['Hadir', 'Reminding', 'Reschedule', 'Tidak Hadir', 'Refund'];
+
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS schedule (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -61,14 +64,29 @@ CREATE TABLE IF NOT EXISTS attendance (
   replacement_id INTEGER,
   admin TEXT
 );
+CREATE TABLE IF NOT EXISTS settings (
+  key TEXT PRIMARY KEY,
+  value TEXT
+);
 `;
+
+const DEFAULT_TEMPLATE = 'Terima kasih {nama} sudah booking kelas {kelas} hari {hari}, {jam} ya. Sampai ketemu di Sawiji Pilates Studio!';
+
+async function migrate() {
+  // idempotent: ALTER gagal kalau kolom sudah ada -> diabaikan
+  for (const sql of [
+    'ALTER TABLE consumers ADD COLUMN quota_granted INTEGER NOT NULL DEFAULT 0',
+    'ALTER TABLE ledger ADD COLUMN consumer_id INTEGER'
+  ]) { try { await db.execute(sql); } catch {} }
+  await db.execute("UPDATE consumers SET quota_granted = CASE package WHEN '10 Kelas' THEN 10 WHEN '15 Kelas' THEN 15 ELSE 0 END WHERE quota_granted = 0 AND package != 'Non-member'");
+}
 
 function init(url, authToken) {
   db = createClient({
     url: url || process.env.TURSO_DATABASE_URL || 'file:pilates.db',
     authToken: authToken || process.env.TURSO_AUTH_TOKEN || undefined
   });
-  return db.executeMultiple(SCHEMA).then(() => db);
+  return db.executeMultiple(SCHEMA).then(() => migrate()).then(() => db);
 }
 
 function getDB() { return db; }
@@ -96,9 +114,12 @@ async function rebuildFromLedger() {
     const key = (sid, name) => `${sid}|${name}`;
     if (e.type === 'booking_new') {
       if (e.schedule_id == null || !e.customer_name) continue;
+      const k = key(e.schedule_id, e.customer_name);
+      const prev = state.get(k);
+      if (prev && prev.status !== 'cancelled') continue; // sama seperti jalur inkremental: booking ganda tidak dihitung dua
       const q = quota.get(e.schedule_id) ?? 6;
       const status = activeCount(e.schedule_id) >= q ? 'waitlist' : 'hold';
-      state.set(key(e.schedule_id, e.customer_name), {
+      state.set(k, {
         schedule_id: e.schedule_id,
         customer_name: e.customer_name,
         phone: e.phone || null,
@@ -188,34 +209,100 @@ async function getHoldQueue() {
   return r.rows;
 }
 
-async function getLedger({ type, customer, startDate, endDate } = {}) {
-  let sql = `SELECT l.*, r.id AS r_ref_id, r.type AS r_ref_type, r.customer_name AS r_ref_customer
+async function getLedger({ type, customer, startDate, endDate, page } = {}) {
+  let sql = `SELECT l.*, r.id AS r_ref_id, r.type AS r_ref_type, r.customer_name AS r_ref_customer,
+      (SELECT name FROM consumers cn WHERE cn.id = l.consumer_id) AS consumer_name_link
     FROM ledger l LEFT JOIN ledger r ON l.ref_id = r.id WHERE 1=1`;
   const args = [];
   if (type) { sql += ' AND l.type = ?'; args.push(type); }
   if (customer) { sql += ' AND l.customer_name LIKE ?'; args.push(`%${customer}%`); }
   if (startDate) { sql += ' AND date(l.created_at) >= ?'; args.push(startDate); }
   if (endDate) { sql += ' AND date(l.created_at) <= ?'; args.push(endDate); }
-  sql += ' ORDER BY l.id DESC LIMIT 500'; // ponytail: 500 terbaru; filter tanggal untuk lebih lama, pagination kalau terasa
+  sql += ' ORDER BY l.id DESC LIMIT 500 OFFSET ?';
+  args.push(((Math.max(1, parseInt(page) || 1)) - 1) * 500);
   const entries = (await db.execute({ sql, args })).rows;
   for (const e of entries) {
     e.refTransaction = e.r_ref_id
       ? { id: e.r_ref_id, type: e.r_ref_type, customer_name: e.r_ref_customer }
       : null;
   }
-  return entries;
+  return entries; // 500 per halaman; view pakai param page untuk halaman berikutnya
+}
+
+async function getTemplate() {
+  const r = (await db.execute({ sql: 'SELECT value FROM settings WHERE key = ?', args: ['wa_template'] })).rows[0];
+  return (r && r.value) || DEFAULT_TEMPLATE;
+}
+
+async function setTemplate(value) {
+  await db.execute({ sql: 'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', args: ['wa_template', value] });
+}
+
+// Terapkan satu kejadian ledger ke proyeksi bookings secara inkremental.
+// rebuildFromLedger() tetap ada sebagai alat repair (dipakai seed & bisa dipanggil ulang).
+async function applyToBookings(e) {
+  const key = (sid, name) => `${sid}|${name}`;
+  if (e.type === 'booking_new') {
+    if (e.schedule_id == null || !e.customer_name) return;
+    const slot = (await db.execute({ sql: 'SELECT quota FROM schedule WHERE id = ?', args: [e.schedule_id] })).rows[0];
+    if (!slot) return;
+    const existing = (await db.execute({ sql: "SELECT id FROM bookings WHERE schedule_id = ? AND customer_name = ? AND status != 'cancelled'", args: [e.schedule_id, e.customer_name] })).rows[0];
+    if (existing) return; // sama seperti replay: booking ganda orang+slot yang sama tidak dihitung dua
+    const active = (await db.execute({ sql: "SELECT COUNT(*) c FROM bookings WHERE schedule_id = ? AND status IN ('hold','confirmed')", args: [e.schedule_id] })).rows[0].c;
+    const status = active >= slot.quota ? 'waitlist' : 'hold';
+    await db.execute({ sql: 'INSERT INTO bookings (schedule_id, customer_name, phone, status, paid_by, created_at) VALUES (?,?,?,?,?,?)',
+      args: [e.schedule_id, e.customer_name, e.phone || null, status, e.paid_by || null, e.created_at] });
+  } else if (e.type === 'payment' || e.type === 'cancel') {
+    let sid = e.schedule_id, name = e.customer_name;
+    if (e.ref_id) {
+      const ref = (await db.execute({ sql: 'SELECT schedule_id, customer_name FROM ledger WHERE id = ?', args: [e.ref_id] })).rows[0];
+      if (ref) { sid = ref.schedule_id ?? sid; name = ref.customer_name || name; }
+    }
+    if (sid == null || !name) return;
+    if (e.type === 'payment') {
+      await db.execute({ sql: "UPDATE bookings SET status = 'confirmed', paid_by = COALESCE(?, paid_by) WHERE schedule_id = ? AND customer_name = ? AND status = 'hold'",
+        args: [e.paid_by ?? null, sid, name] });
+    } else {
+      await db.execute({ sql: "UPDATE bookings SET status = 'cancelled' WHERE schedule_id = ? AND customer_name = ? AND status != 'cancelled'",
+        args: [sid, name] });
+    }
+  } else if (e.type === 'reschedule') {
+    if (e.from_schedule_id == null || e.to_schedule_id == null || !e.customer_name) return;
+    const old = (await db.execute({ sql: 'SELECT * FROM bookings WHERE schedule_id = ? AND customer_name = ? AND status != ?', args: [e.from_schedule_id, e.customer_name, 'cancelled'] })).rows[0];
+    if (old) await db.execute({ sql: "UPDATE bookings SET status = 'cancelled' WHERE id = ?", args: [old.id] });
+    const slot = (await db.execute({ sql: 'SELECT quota FROM schedule WHERE id = ?', args: [e.to_schedule_id] })).rows[0];
+    if (!slot) return;
+    const active = (await db.execute({ sql: "SELECT COUNT(*) c FROM bookings WHERE schedule_id = ? AND status IN ('hold','confirmed')", args: [e.to_schedule_id] })).rows[0].c;
+    const status = active >= slot.quota ? 'waitlist' : 'hold';
+    await db.execute({ sql: 'INSERT INTO bookings (schedule_id, customer_name, phone, status, paid_by, created_at) VALUES (?,?,?,?,?,?)',
+      args: [e.to_schedule_id, e.customer_name, e.phone || (old && old.phone) || null, status, (old && old.paid_by) || null, e.created_at] });
+  }
 }
 
 async function addTransaction(data, skipRebuild) {
   const now = new Date().toISOString();
-  const cols = ['created_at', 'type', 'customer_name', 'phone', 'schedule_id', 'session_count', 'nominal', 'payment_method', 'payment_status', 'paid_by', 'ref_id', 'from_schedule_id', 'to_schedule_id', 'reason', 'admin', 'notes'];
-  const vals = [now, data.type, data.customer_name, data.phone, data.schedule_id, data.session_count, data.nominal, data.payment_method, data.payment_status, data.paid_by, data.ref_id, data.from_schedule_id, data.to_schedule_id, data.reason, data.admin, data.notes].map(v => v ?? null);
+  const cols = ['created_at', 'type', 'customer_name', 'phone', 'schedule_id', 'session_count', 'nominal', 'payment_method', 'payment_status', 'paid_by', 'ref_id', 'from_schedule_id', 'to_schedule_id', 'reason', 'admin', 'notes', 'consumer_id'];
+  const vals = [now, data.type, data.customer_name, data.phone, data.schedule_id, data.session_count, data.nominal, data.payment_method, data.payment_status, data.paid_by, data.ref_id, data.from_schedule_id, data.to_schedule_id, data.reason, data.admin, data.notes, data.consumer_id].map(v => v ?? null);
   const r = await db.execute({
     sql: `INSERT INTO ledger (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`,
     args: vals
   });
-  if (!skipRebuild) await rebuildFromLedger();
+  const entry = { ...data, id: Number(r.lastInsertRowid), created_at: now };
+  if (data.type === 'add_package' && data.consumer_id && PACKAGES[data.package]) {
+    await grantPackage(data.consumer_id, data.package);
+  }
+  if (!skipRebuild) await applyToBookings(entry);
   return Number(r.lastInsertRowid);
+}
+
+// Beli/panjang paket: tambah kuota + label paket. ponytail: validUntil dihitung dari kelas pertama
+// dengan minggu paket TERAKHIR yang dibeli — perpanjangan ganda paket beda ukuran meleset sedikit;
+// upgrade path: tabel grants kalau aturan masa aktif jadi rumit
+async function grantPackage(consumerId, packageName) {
+  const pkg = PACKAGES[packageName];
+  if (!pkg) throw new Error('Paket tidak dikenal');
+  await db.execute({ sql: 'UPDATE consumers SET quota_granted = quota_granted + ?, package = ?, status = ? WHERE id = ?',
+    args: [pkg.quota, packageName, 'Member', consumerId] });
 }
 
 async function addSchedule(data) {
@@ -237,28 +324,26 @@ async function deleteSchedule(id) {
 }
 
 module.exports = { init, rebuildFromLedger, getSchedule, getHoldQueue, getLedger, addTransaction, addSchedule, deleteSchedule, getDB, STATES,
-  addConsumer, getConsumers, getConsumer, addAttendance, getAttendance, getMembership };
-
-const PACKAGES = { '10 Kelas': { quota: 10, weeks: 5 }, '15 Kelas': { quota: 15, weeks: 7 } };
-const ATTEND_STATUSES = ['Hadir', 'Reminding', 'Reschedule', 'Tidak Hadir', 'Refund'];
+  addConsumer, getConsumers, getConsumer, addAttendance, getAttendance, getMembership, grantPackage, getTemplate, setTemplate, DEFAULT_TEMPLATE, PACKAGES };
 
 function membershipOf(consumer, attRows, sessionDates) {
   const pkg = PACKAGES[consumer.package];
+  const quota = consumer.quota_granted || 0;
   const used = attRows.filter(a => a.status === 'Hadir' || a.status === 'Reminding').length;
   const hadirDates = attRows.filter(a => a.status === 'Hadir').map(a => sessionDates.get(a.session_id)).filter(Boolean).sort();
   const first = hadirDates[0] || null, last = hadirDates[hadirDates.length - 1] || null;
   let validUntil = null, state = 'Non-member';
-  if (pkg) {
+  if (quota > 0) {
     state = 'Aktif';
-    if (first) {
+    if (first && pkg) {
       const d = new Date(first + 'T00:00:00');
       d.setDate(d.getDate() + pkg.weeks * 7);
       validUntil = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; // lokal, bukan toISOString (WIB = UTC+7)
     }
-    if (pkg.quota - used <= 0) state = 'Kelas Habis';
+    if (quota - used <= 0) state = 'Kelas Habis';
     else if (validUntil && validUntil < new Date().toLocaleDateString('sv')) state = 'Kedaluwarsa';
   }
-  return { quota: pkg ? pkg.quota : 0, used, sisa: pkg ? pkg.quota - used : 0, first, last, validUntil, state };
+  return { quota, used, sisa: quota - used, first, last, validUntil, state };
 }
 
 async function getMembership(consumerId) {
@@ -278,9 +363,10 @@ async function addConsumer(data) {
   const last = (await db.execute('SELECT code FROM consumers ORDER BY id DESC LIMIT 1')).rows[0];
   const next = last ? 'K' + String(parseInt(last.code.slice(1)) + 1).padStart(4, '0') : 'K0001';
   const pkg = PACKAGES[data.package] ? data.package : 'Non-member';
+  const granted = PACKAGES[pkg] ? PACKAGES[pkg].quota : 0;
   const r = await db.execute({
-    sql: 'INSERT INTO consumers (code, name, phone, instagram, birth_date, status, package, condition, registered_at) VALUES (?,?,?,?,?,?,?,?,?)',
-    args: [next, name, data.phone || null, data.instagram || null, data.birth_date || null, pkg === 'Non-member' ? 'Non-member' : 'Member', pkg, data.condition || null, data.registered_at || new Date().toISOString().slice(0, 10)]
+    sql: 'INSERT INTO consumers (code, name, phone, instagram, birth_date, status, package, condition, registered_at, quota_granted) VALUES (?,?,?,?,?,?,?,?,?,?)',
+    args: [next, name, data.phone || null, data.instagram || null, data.birth_date || null, pkg === 'Non-member' ? 'Non-member' : 'Member', pkg, data.condition || null, data.registered_at || new Date().toISOString().slice(0, 10), granted]
   });
   return Number(r.lastInsertRowid);
 }

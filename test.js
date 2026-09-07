@@ -1,6 +1,6 @@
 const { describe, it, before } = require('node:test');
 const assert = require('node:assert/strict');
-const { init, getDB, addSchedule, addTransaction, getSchedule, addConsumer, getConsumers, getConsumer, addAttendance, getAttendance } = require('./db');
+const { init, getDB, addSchedule, addTransaction, getSchedule, addConsumer, getConsumers, getConsumer, addAttendance, getAttendance, getMembership } = require('./db');
 
 describe('Sawiji Pilates DB', () => {
   before(async () => {
@@ -128,5 +128,41 @@ describe('Sawiji Pilates DB', () => {
     await assert.rejects(() => addAttendance({ consumer_id: cid, session_id: s1, status: 'Hadir' }), /sudah punya log/);
     await assert.rejects(() => addAttendance({ consumer_id: cid, session_id: s2, status: 'Reschedule' }), /wajib pilih sesi pengganti/);
     await addAttendance({ consumer_id: cid, session_id: s2, status: 'Reschedule', replacement_id: s1 });
+  });
+
+  it('add_package grants quota (stackable)', async () => {
+    await resetDB();
+    const cid = await addConsumer({ name: 'Paket User' });
+    await addTransaction({ type: 'add_package', customer_name: 'Paket User', consumer_id: cid, package: '10 Kelas', nominal: 1200000 });
+    let m = await getMembership(cid);
+    assert.equal(m.membership.quota, 10);
+    await addTransaction({ type: 'add_package', customer_name: 'Paket User', consumer_id: cid, package: '15 Kelas', nominal: 1700000 });
+    m = await getMembership(cid);
+    assert.equal(m.membership.quota, 25);
+    assert.equal(m.membership.sisa, 25);
+  });
+
+  it('incremental write == full replay (equivalence)', async () => {
+    await resetDB();
+    const s1 = await addSchedule({ date: '2026-09-01', session_no: 1, time: '08:00', class_name: 'Basic', quota: 2 });
+    const s2 = await addSchedule({ date: '2026-09-02', session_no: 1, time: '08:00', class_name: 'Basic', quota: 2 });
+    await addTransaction({ type: 'booking_new', customer_name: 'A', schedule_id: s1 });
+    await addTransaction({ type: 'booking_new', customer_name: 'A', schedule_id: s1 }); // duplikat -> tidak dihitung dua
+    await addTransaction({ type: 'payment', customer_name: 'A', schedule_id: s1 });
+    await addTransaction({ type: 'booking_new', customer_name: 'B', schedule_id: s1 });
+    await addTransaction({ type: 'booking_new', customer_name: 'C', schedule_id: s1 }); // waitlist (kuota 2)
+    await addTransaction({ type: 'cancel', customer_name: 'B', schedule_id: s1 });
+    await addTransaction({ type: 'reschedule', customer_name: 'C', from_schedule_id: s1, to_schedule_id: s2 });
+    const snap = async () => (await getDB().execute('SELECT schedule_id, customer_name, status FROM bookings ORDER BY schedule_id, customer_name')).rows.map(r => `${r.schedule_id}|${r.customer_name}|${r.status}`).join(';');
+    const before = await snap();
+    const { rebuildFromLedger } = require('./db');
+    await rebuildFromLedger();
+    assert.equal(await snap(), before);
+    // dan hasil akhirnya benar secara semantik
+    const sched = await getSchedule();
+    const slot1 = sched.find(s => s.id === s1), slot2 = sched.find(s => s.id === s2);
+    assert.equal(slot1.confirmed, 1); // A
+    assert.equal(slot1.hold, 0);
+    assert.equal(slot2.hold, 1); // C pindah, status hold ulang
   });
 });

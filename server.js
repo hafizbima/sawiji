@@ -3,7 +3,7 @@ const layouts = require('express-ejs-layouts');
 const crypto = require('crypto');
 const path = require('path');
 const { init, getSchedule, getHoldQueue, getLedger, addTransaction, addSchedule, deleteSchedule,
-  addConsumer, getConsumers, getConsumer, addAttendance, getAttendance } = require('./db');
+  addConsumer, getConsumers, getConsumer, addAttendance, getAttendance, grantPackage, getTemplate, setTemplate, PACKAGES } = require('./db');
 
 const PORT = process.env.PORT || 3000;
 const PASSWORD = process.env.PASSWORD || 'sawiji';
@@ -135,7 +135,8 @@ app.get('/transaksi/baru', async (req, res, next) => {
     const month = monthParam(req.query.month);
     const schedule = await getSchedule({ month });
     const ledger = (await getDB().execute('SELECT id, type, customer_name FROM ledger ORDER BY id DESC LIMIT 50')).rows;
-    res.render('transaksi-form', { schedule, ledger, data: {}, month });
+    const consumers = await getConsumers();
+    res.render('transaksi-form', { schedule, ledger, consumers, data: {}, month });
   } catch (e) { next(e); }
 });
 
@@ -156,7 +157,9 @@ app.post('/transaksi/baru', async (req, res, next) => {
       to_schedule_id: req.body.to_schedule_id ? Number(req.body.to_schedule_id) : null,
       reason: req.body.reason || null,
       admin: req.body.admin || 'admin',
-      notes: req.body.notes || null
+      notes: req.body.notes || null,
+      consumer_id: req.body.consumer_id ? Number(req.body.consumer_id) : null,
+      package: req.body.package || null
     });
     res.redirect('/riwayat');
   } catch (e) { next(e); }
@@ -164,13 +167,15 @@ app.post('/transaksi/baru', async (req, res, next) => {
 
 app.get('/riwayat', async (req, res, next) => {
   try {
+    const page = Math.max(1, parseInt(req.query.page) || 1);
     const ledger = await getLedger({
       type: req.query.type || null,
       customer: req.query.customer || null,
       startDate: req.query.startDate || null,
-      endDate: req.query.endDate || null
+      endDate: req.query.endDate || null,
+      page
     });
-    res.render('riwayat', { ledger, filters: req.query });
+    res.render('riwayat', { ledger, filters: { ...req.query, page } });
   } catch (e) { next(e); }
 });
 
@@ -184,8 +189,46 @@ app.get('/transaksi/:id/template', async (req, res, next) => {
       slot = (await getDB().execute({ sql: 'SELECT * FROM schedule WHERE id = ?', args: [entry.schedule_id] })).rows[0] || null;
     }
     const hari = slot ? new Date(slot.date).toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : '';
-    const template = `Terima kasih ${entry.customer_name} sudah booking kelas ${slot ? slot.class_name : ''} hari ${hari}, ${slot ? slot.time : ''} ya. Sampai ketemu di Sawiji Pilates Studio!`;
+    const tmpl = await getTemplate();
+    const template = tmpl
+      .replace('{nama}', entry.customer_name || '')
+      .replace('{kelas}', slot ? slot.class_name : '')
+      .replace('{hari}', hari)
+      .replace('{jam}', slot ? slot.time : '');
     res.render('template', { template, entry, slot });
+  } catch (e) { next(e); }
+});
+
+app.get('/pengaturan', async (req, res, next) => {
+  try {
+    res.render('pengaturan', { template: await getTemplate(), saved: req.query.saved || null });
+  } catch (e) { next(e); }
+});
+
+app.post('/pengaturan', async (req, res, next) => {
+  try {
+    await setTemplate(req.body.template || '');
+    res.redirect('/pengaturan?saved=1');
+  } catch (e) { next(e); }
+});
+
+app.post('/konsumen/:id/paket', async (req, res, next) => {
+  try {
+    const cid = Number(req.params.id);
+    const { getDB } = require('./db');
+    const c = (await getDB().execute({ sql: 'SELECT name FROM consumers WHERE id = ?', args: [cid] })).rows[0];
+    if (!c) return res.status(404).send('Konsumen tidak ditemukan');
+    await addTransaction({
+      type: 'add_package',
+      customer_name: c.name,
+      consumer_id: cid,
+      package: req.body.package,
+      nominal: req.body.nominal ? Number(req.body.nominal) : null,
+      payment_method: req.body.payment_method || null,
+      payment_status: 'Lunas',
+      admin: req.body.admin || 'admin'
+    });
+    res.redirect('/konsumen/' + cid);
   } catch (e) { next(e); }
 });
 

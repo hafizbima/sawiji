@@ -12,7 +12,9 @@ Dashboard internal untuk menggantikan Excel + tracking manual WhatsApp di **Sawi
 - **Database Konsumen** — master 293 konsumen (K0001+, profil, kondisi khusus), pencarian instan.
 - **Membership** — kuota paket 10 Kelas (5 minggu) / 15 Kelas (7 minggu), sisa kuota & status Aktif/Kedaluwarsa/Habis dihitung dari absensi.
 - **Absensi** — log kehadiran per sesi (Hadir/Reminding/Reschedule/Tidak Hadir/Refund), reschedule ke sesi pengganti, validasi anti log ganda.
-- Badge jumlah antrian konfirmasi di nav, filter tabel instan tanpa request server.
+- **Uang ↔ kuota tersambung** — transaksi "Tambah Paket" (dari form atau tombol di halaman konsumen) menaikkan kuota; absensi memotongnya. Sisa = kuota dibeli − terpakai.
+- **Pengaturan** — template pesan WA bisa diedit dari UI (placeholder `{nama} {kelas} {hari} {jam}`).
+- Badge jumlah antrian konfirmasi di nav, filter tabel instan tanpa request server, riwayat ber-pagination (500/halaman).
 
 ## Stack
 
