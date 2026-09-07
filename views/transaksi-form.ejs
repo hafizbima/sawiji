@@ -1,4 +1,10 @@
 <h1>Transaksi Baru</h1>
+<form method="get" action="/transaksi/baru" class="inline-form" style="margin-bottom:.75rem">
+  <label style="align-self:center;font-size:.8rem;font-weight:600">Bulan slot:</label>
+  <input type="month" name="month" value="<%= month || '' %>">
+  <button type="submit">Ganti</button>
+  <a href="/transaksi/baru?month=all" style="font-size:.8rem;align-self:center">Semua</a>
+</form>
 <form method="post" action="/transaksi/baru" id="transaksi-form">
   <div class="form-grid">
 

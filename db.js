@@ -154,9 +154,12 @@ async function rebuildFromLedger() {
   await db.batch(stmts, 'write');
 }
 
-async function getSchedule() {
+async function getSchedule({ month } = {}) {
+  const sQ = month
+    ? db.execute({ sql: 'SELECT * FROM schedule WHERE date LIKE ? ORDER BY date, session_no', args: [month + '%'] })
+    : db.execute('SELECT * FROM schedule ORDER BY date, session_no');
   const [s, b] = await Promise.all([
-    db.execute('SELECT * FROM schedule ORDER BY date, session_no'),
+    sQ,
     db.execute("SELECT * FROM bookings WHERE status IN ('hold','confirmed','waitlist') ORDER BY id")
   ]);
   const bySlot = new Map();

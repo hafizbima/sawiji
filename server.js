@@ -75,9 +75,16 @@ app.get('/', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+function monthParam(q) {
+  const now = new Date().toLocaleDateString('sv').slice(0, 7);
+  if (q === 'all') return null;
+  return /^\d{4}-\d{2}$/.test(q || '') ? q : now;
+}
+
 app.get('/jadwal', async (req, res, next) => {
   try {
-    res.render('jadwal', { schedule: await getSchedule() });
+    const month = monthParam(req.query.month);
+    res.render('jadwal', { schedule: await getSchedule({ month }), month });
   } catch (e) { next(e); }
 });
 
@@ -125,9 +132,10 @@ app.post('/hold/:id/confirm', async (req, res, next) => {
 app.get('/transaksi/baru', async (req, res, next) => {
   try {
     const { getDB } = require('./db');
-    const schedule = await getSchedule();
+    const month = monthParam(req.query.month);
+    const schedule = await getSchedule({ month });
     const ledger = (await getDB().execute('SELECT id, type, customer_name FROM ledger ORDER BY id DESC LIMIT 50')).rows;
-    res.render('transaksi-form', { schedule, ledger, data: {} });
+    res.render('transaksi-form', { schedule, ledger, data: {}, month });
   } catch (e) { next(e); }
 });
 

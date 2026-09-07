@@ -1,4 +1,10 @@
-<h1>Jadwal Kelas <small><span id="row-count"><%= schedule.length %></span> slot</small></h1>
+<h1>Jadwal Kelas <small><span id="row-count"><%= schedule.length %></span> slot<%= month ? ' — ' + month : ' — semua bulan' %></small></h1>
+
+<form method="get" action="/jadwal" class="inline-form" style="margin-bottom:.75rem">
+  <input type="month" name="month" value="<%= month || '' %>">
+  <button type="submit">Lihat</button>
+  <a href="/jadwal?month=all" style="font-size:.8rem;align-self:center">Semua bulan</a>
+</form>
 
 <input type="search" id="table-search" placeholder="Cari tanggal / coach / nama peserta…" style="width:100%;max-width:340px;margin-bottom:.75rem" autocomplete="off">
 
